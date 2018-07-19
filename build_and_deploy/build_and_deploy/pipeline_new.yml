@@ -1,0 +1,114 @@
+resource_types:
+- name: artifactory
+  type: docker-image
+  source:
+    repository: pivotalservices/artifactory-resource
+
+resources:
+- name: bics-dashboard-services
+  type: git
+  source:
+    uri: {{bics-dashboard-services-repo}}
+    branch: master
+    username: {{git-username}}
+    password: {{git-password}}
+    skip_ssl_verification: true
+
+- name: bics-dashboard-pipeline
+  type: git
+  source:
+    uri: {{bics-dashboard-pipeline-repo}}
+    branch: master
+    username: {{git-username}}
+    password: {{git-password}}
+    skip_ssl_verification: true
+
+- name: cf-app
+  type: cf
+  source:
+    api: {{cf-api-url}}
+    username: {{cf-username}}
+    password: {{cf-password}}
+    organization: {{cf-org}}
+    space: {{cf-space}}
+    skip_cert_check: true
+
+- name: bics-dashboard-build
+  type: artifactory
+  source:
+    endpoint: {{artifactory-endpoint}}
+    repository: {{artifactory-java-app-repo}}
+    regex: {{artifactory-java-app-regex}}
+    username: {{artifactory-username}}
+    password: {{artifactory-password}}
+    skip_ssl_verification: true
+
+jobs:
+- name: build-bics-dashboard-save-to-artifactory
+  plan:
+  - get: bics-dashboard-services
+    trigger: true
+  - task: build_app
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: gradle
+          tag: 4.8-jdk-alpine
+      inputs:
+        - name: bics-dashboard-services
+      outputs:
+        - name: build
+      run:
+        user: root
+        path: sh
+        args:
+        - -exc
+        - |
+          cd bics-dashboard-services
+          chmod 777 gradlew
+          ./gradlew clean
+          ./gradlew test bootJar  --stacktrace
+          ls -lht ./build/libs
+          cp ./build/libs/*.jar ../build
+          ls -alrt ../build
+  - put: bics-dashboard-build
+    params: { file: ./build/bics-dashboard-services-*-SNAPSHOT.jar }
+
+
+- name: deploy_bics_dashboard_app
+  plan:
+  - get: bics-dashboard-build
+    passed: ['build-bics-dashboard-save-to-artifactory']
+    trigger: true
+  - get: bics-dashboard-services
+  - put: cf-app
+    params:
+      manifest: bics-dashboard-services/manifest/manifest-sg.yml
+      path: bics-dashboard-build/bics-dashboard-services-0.0.1-SNAPSHOT.jar
+
+
+- name: validate-bics-dashboard-app
+  serial: true
+  plan:
+  - get: cf-app
+    passed: ['deploy_bics_dashboard_app']
+    trigger: true
+  - get: bics-dashboard-pipeline
+  - task: validate-app
+    file: bics-dashboard-pipeline/task/validate-app/task.yml
+    params:
+      APP_NAME: bics-dashboard-services
+      CF_APP_URL: {{cf-apps-url}}
+      <<: *cf_params
+
+
+
+
+cf_params: &cf_params
+  CF_API_URL: {{cf-api-url}}
+  CF_USERNAME: {{cf-username}}
+  CF_PASSWORD: {{cf-password}}
+  CF_ORG: {{cf-org}}
+  CF_SPACE: {{cf-space}}

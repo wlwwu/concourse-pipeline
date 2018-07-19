@@ -1,0 +1,16 @@
+cf-api-url: changeme
+cf-apps-url: changeme
+cf-username: changeme
+cf-password: changeme
+cf-org: changeme
+cf-space: changeme
+git-username: changeme
+git-password: changeme
+cloudfoundry-dashboard-services-repo:  changeme
+cloudfoundry-dashboard-pipeline-repo:  changeme
+artifactory-endpoint: changeme
+artifactory-username: changeme
+artifactory-password: changeme
+artifactory-java-app-repo: changeme
+artifactory-java-app-regex: changeme
+cf-apps-url: changeme
